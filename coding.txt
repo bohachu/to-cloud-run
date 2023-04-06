@@ -1,0 +1,74 @@
+== chatgpt 22:38 ==
+
+我有以下的 fastapi 程式碼
+
+class Params(BaseModel):
+    github_access_token: str
+    vercel_access_token: str
+    source_url: str
+    target_name: str
+    github_repo_url: str
+    vercel_project_name: str
+    vercel_team_id: str
+
+
+@app.post("/submit")
+async def submit_params(params: Params):
+    return {"message": "Parameters received successfully", "params": params}
+
+幫我修改在送出按下去之後 submit_params
+我要陸續呼叫以下的套件功能
+. 要先設定環境變數
+. 然後要呼叫 git_clone.main(source_url, target_name)
+. 然後要呼叫 vercel_deploy.main(github_repo_url, vercel_project_name, vercel_team_id)
+. 把所有呼叫之後的結果回傳給前端
+
+-- pip install vercel-deploy 套件網路 API 參考文件如下 --
+
+import git_clone
+
+source_url = "https://github.com/source_user/source_repo.git"
+target_name = "new_repo_name"
+
+response_string=git_clone.main(source_url, target_name)
+
+import vercel_deploy
+
+github_repo_url = "https://github.com/user/repo.git"
+vercel_project_name = "vercel_project_name"
+vercel_team_id = "team_id"
+
+response_string=vercel_deploy.main(github_repo_url, vercel_project_name, vercel_team_id)
+
+
+== 2023-04-05 22:37 Bowen ==
+. vercel 部署已經成功
+. 地雷，要注意 requirements.txt引用充足 vercel.json路由正確
+
+== 2023-04-05 22:28 Bowen ==
+. 已經可以前端顯示
+. 準備要弄上 vercel 測試
+
+== chatgpt ==
+
+. 請幫我建構前後端，都使用 fastapi app.py 單一檔案不要有額外的檔案出現
+. 前端使用 bootstrap RWD 排版要整齊, 手機也要能用, 引用 bootstrap 時不要 integrity 屬性
+. 前端要能輸入以下參數 001 to 007
+    . 環境變數
+        001 <your-github-access-token>
+        002 <your-vercel-access-token>
+    . git_clone 
+        003 <source_url> 
+        004 <target_name>
+    . vercel_deploy
+        005 <github_repo_url> 
+        006 <vercel_project_name> 
+        007 <vercel_team_id>
+. 前端參數輸入之後儲存在瀏覽器的 localStorage
+. 如果 localStorage 沒有這些參數就預設是空的輸入框
+. 如果 localStorage 已經有 001 to 007 參數，事先帶入預設值放上去
+. 前端要有一個「送出」按鈕，可以把參數送給後端
+. 前端要有一個較大塊的返回顯示區域，專門用來顯示後端執行之後的返回結果
+. 送出按鈕按下去之後，要能夠把後端返回哪些成功或失敗的訊息，全部顯示在返回顯示區域
+. fastapi 後端接收到 001 to 007 參數之後，返回一個 json 說明 OK 成功
+
