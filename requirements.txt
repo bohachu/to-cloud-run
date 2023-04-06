@@ -1,0 +1,6 @@
+fastapi
+pydantic
+Jinja2
+starlette
+uvicorn
+vercel-deploy==1.9
