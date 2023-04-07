@@ -1,0 +1,355 @@
+
+
+
+-- find.sh
+pwd
+find . -type f \( -name "*.js" -o -name "*.html" -o -name "*.py" -o -name "*.sh" \) -not -path "./venv/*" -exec sh -c 'echo "\n\n" && echo -- "${0##*/}" && cat "${0}"' {} \; > find.txt
+echo output find.txt
+
+
+-- uv.sh
+uvicorn app:app --reload
+
+
+
+-- push.sh
+git add .
+git commit -m ok
+git push
+
+
+
+-- ai.js
+const aiModule = (() => {
+    const sendToAI = async (input) => {
+        const formData = new FormData();
+        formData.append("input", input);
+        const data = await fetch("/api/ai", {
+            method: "POST",
+            body: formData,
+        }).then((res) => res.json());
+        return data;
+    };
+
+    return { sendToAI };
+})();
+
+
+-- tree.js
+const treeModule = (() => {
+    const buildTree = (treeData) => {
+        const data = treeData.tree.map((item) => {
+            const parentPath = item.path.split("/").slice(0, -1).join("/");
+            return {
+                id: item.path,
+                parent: parentPath === "" ? "#" : parentPath,
+                text: item.path.split("/").pop(),
+            };
+        });
+        $("#github-tree").jstree("destroy");
+        $("#github-tree").jstree({ core: { data } });
+    };
+
+    $("#github-tree").on("select_node.jstree", async (e, data) => {
+        const token = document.getElementById("github-token").value;
+        const url = document.getElementById("github-url").value;
+        const path = data.selected[0];
+        const formData = new FormData();
+        formData.append("token", token);
+        formData.append("url", url);
+        formData.append("path", path);
+        const file = await fetch("/api/read_file", {
+            method: "POST",
+            body: formData,
+        }).then((res) => res.json());
+        if (file.content) {
+            // Decode the Base64 string using TextDecoder
+            const base64ToUint8Array = (base64) => {
+                const binary_string = atob(base64);
+                const len = binary_string.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binary_string.charCodeAt(i);
+                }
+                return bytes;
+            };
+            const utf8ArrayToString = (uintArray) => {
+                const decoder = new TextDecoder();
+                return decoder.decode(uintArray);
+            };
+            const content = utf8ArrayToString(base64ToUint8Array(file.content));
+            editorModule.codeEditor.setValue(content);
+            editorModule.codeEditor.clearSelection();
+            editorModule.fileEditor.setValue(content);
+            editorModule.fileEditor.clearSelection();
+            localStorage.setItem("editorModule_path", path);
+            localStorage.setItem("editorModule_sha", file.sha);
+        } else {
+            console.error("File content not found");
+        }
+    });
+
+    return { buildTree };
+})();
+
+
+-- main.js
+// Initialize the application
+editorModule.configureEditors();
+
+// Load GitHub Token and URL from localStorage
+document.getElementById("github-token").value = localStorage.getItem("github-token") || "";
+document.getElementById("github-url").value = localStorage.getItem("github-url") || "";
+
+// Event listeners
+document.getElementById("github-connect").addEventListener("click", async () => {
+    const token = document.getElementById("github-token").value;
+    const url = document.getElementById("github-url").value;
+
+    // Save GitHub Token and URL to localStorage
+    localStorage.setItem("github-token", token);
+    localStorage.setItem("github-url", url);
+
+    const tree = await githubModule.getTree(token, url);
+    treeModule.buildTree(tree);
+});
+
+document.getElementById("send-to-ai").addEventListener("click", async () => {
+    const input = document.getElementById("ai-input").value;
+    const data = await aiModule.sendToAI(input);
+    const code = data.code;
+    editorModule.codeEditor.setValue(code);
+    editorModule.codeEditor.clearSelection();
+});
+
+
+-- editor.js
+const editorModule = (() => {
+    document.addEventListener('keydown', function(event) {
+      if (event.metaKey && event.keyCode === 83) { // metaKey 對應 cmd 鍵
+        event.preventDefault(); // 取消預設行為
+      }
+    });
+
+    const fileEditor = ace.edit("file-editor");
+    fileEditor.setTheme("ace/theme/monokai");
+    fileEditor.setFontSize(17);
+
+    const codeEditor = ace.edit("ai-code");
+    codeEditor.setTheme("ace/theme/monokai");
+    codeEditor.setFontSize(17);
+
+    const configureEditors = () => {
+        fileEditor.setTheme("ace/theme/monokai");
+        fileEditor.setFontSize(17);
+        codeEditor.setTheme("ace/theme/monokai");
+        codeEditor.setFontSize(17);
+    };
+    const utf8ToBase64 = (str) => {
+        return btoa(unescape(encodeURIComponent(str)));
+    };
+    const saveFile = () => {
+        const token = document.getElementById("github-token").value;
+        const url = document.getElementById("github-url").value;
+
+        const path = localStorage.getItem("editorModule_path");
+        const sha = localStorage.getItem("editorModule_sha");
+
+        const content = fileEditor.getValue();
+        githubModule.updateFile(token, url, path, content, sha);
+    };
+
+    fileEditor.commands.addCommand({
+        name: "saveFile",
+        bindKey: { win: "Ctrl-S", mac: "Command-S" },
+        exec: saveFile,
+    });
+
+    return { fileEditor, codeEditor, configureEditors, saveFile };
+})();
+
+
+-- github.js
+const githubModule = (() => {
+    const getTree = async (token, url) => {
+        const formData = new FormData();
+        formData.append("token", token);
+        formData.append("url", url);
+        const tree = await fetch("/api/get_tree", {
+            method: "POST",
+            body: formData,
+        }).then((res) => res.json());
+        return tree;
+    };
+
+    const readFile = async (token, url, path) => {
+        const formData = new FormData();
+        formData.append("token", token);
+        formData.append("url", url);
+        formData.append("path", path);
+        const file = await fetch("/api/read_file", {
+            method: "POST",
+            body: formData,
+        }).then((res) => res.json());
+        return file;
+    };
+
+    const updateFile = async (token, url, path, content, sha) => {
+        const formData = new FormData();
+        formData.append("token", token);
+        formData.append("url", url);
+        formData.append("path", path);
+        formData.append("content", content);
+        formData.append("sha", sha);
+        await fetch("/api/update_file", {
+            method: "POST",
+            body: formData,
+        });
+    };
+
+    return { getTree, readFile, updateFile };
+})();
+
+
+-- index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Editor with AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.13/ace.js"></script>
+</head>
+<body class="bg-dark text-white">
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-6">
+            <label for="github-token" class="form-label">GitHub Token</label>
+            <input type="password" class="form-control" id="github-token" placeholder="Your GitHub token">
+        </div>
+        <div class="col-md-6">
+            <label for="github-url" class="form-label">GitHub URL</label>
+            <input type="text" class="form-control" id="github-url" placeholder="https://github.com/user/repo">
+        </div>
+    </div>
+    <div class="row mt-2">
+        <div class="col-md-12">
+            <button id="github-connect" class="btn btn-primary">GitHub 連線</button>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div id="github-tree"></div>
+        </div>
+        <div class="col-md-8">
+            <div id="file-editor" class="border" style="height: 400px;"></div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <label for="ai-input" class="form-label">請 AI 寫程式</label>
+            <textarea class="form-control" id="ai-input" rows="3"></textarea>
+        </div>
+    </div>
+    <div class="row mt-2">
+        <div class="col-md-12">
+            <button id="send-to-ai" class="btn btn-primary">傳送 AI 💗</button>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <label for="ai-code" class="form-label">AI 幫忙寫的程式</label>
+            <div id="ai-code" class="border" style="height: 400px;"></div>
+        </div>
+    </div>
+</div>
+<script src="/static/js/editor.js"></script>
+<script src="/static/js/tree.js"></script>
+<script src="/static/js/ai.js"></script>
+<script src="/static/js/github.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>
+
+
+-- app.py
+import base64
+
+import requests
+from fastapi import FastAPI, Request
+from fastapi import Form
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from starlette.responses import RedirectResponse
+
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+class GitHubData(BaseModel):
+    token: str
+    url: str
+
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return RedirectResponse("./static/html/index.html")
+
+
+@app.post("/api/get_tree")
+async def get_tree(token: str = Form(...), url: str = Form(...)):
+    headers = {"Authorization": f"token {token}"}
+    repo_api_url = url.replace("https://github.com", "https://api.github.com/repos")
+    tree_url = f"{repo_api_url}/git/trees/main?recursive=1"
+    response = requests.get(tree_url, headers=headers)
+    tree = response.json()
+    return tree
+
+
+@app.post("/api/read_file")
+async def read_file(token: str = Form(...), url: str = Form(...), path: str = Form(...)):
+    headers = {"Authorization": f"token {token}"}
+    repo_api_url = url.replace("https://github.com", "https://api.github.com/repos")
+    file_url = f"{repo_api_url}/contents/{path}"
+    response = requests.get(file_url, headers=headers)
+    content = response.json()
+    return content
+
+
+@app.post("/api/update_file")
+async def update_file(token: str = Form(...), url: str = Form(...), path: str = Form(...), content: str = Form(...),
+                      sha: str = Form(...)):
+    print(f"app.py, update_file, token:{token}, url:{url}, path:{path}, content:{content}, sha:{sha}")
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    repo_api_url = url.replace("https://github.com", "https://api.github.com/repos")
+    file_url = f"{repo_api_url}/contents/{path}"
+    file_data = requests.get(file_url, headers=headers).json()
+    update_data = {
+        "message": "Update file via FastAPI",
+        "author": {"name": "bohachu", "email": "cbh@cameo.tw"},
+        "committer": {"name": "bohachu", "email": "cbh@cameo.tw"},
+        "content": base64.b64encode(content.encode("utf-8")),
+        "sha": sha,
+    }
+    print("file_url", file_url)
+    print("update_data", update_data)
+    print("headers", headers)
+    response = requests.put(file_url, json=update_data, headers=headers)
+    print("update_file,response.json():", response.json())
+    return response.json()
+
+
+@app.post("/api/generate_code")
+async def generate_code(prompt: str):
+    # 請填寫您的 ChatGPT API 實現，例如使用 OpenAI API
+    # 在此示例中，我們將返回一個固定的 Hello World 程式碼
+    return {"code": "print('Hello, World!')"}

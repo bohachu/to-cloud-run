@@ -4,3 +4,6 @@ Jinja2
 starlette
 uvicorn
 vercel-deploy==1.9
+PyGithub
+python-dotenv
+requests

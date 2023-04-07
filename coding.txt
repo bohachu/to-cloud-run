@@ -1,74 +1,445 @@
-== chatgpt 22:38 ==
+== 2023-04-06 22:00 Bowen ==
+. 自動化 github to google cloud run 部署作業
 
-我有以下的 fastapi 程式碼
+可以考慮以下 Python CLI 參數：
+1. --github-repo：指定 GitHub 倉庫的 URL，例如：https://github.com/username/repo.git。
+2. --project-id：指定 Google Cloud Platform 項目的 ID。
+3. --service-name：指定要在 Google Cloud Run 中創建的服務名稱。
+4. --region：指定要部署服務的 Google Cloud Run 區域。
+5. --dockerfile：指定 Dockerfile 的路徑，默認為工作目錄中的 Dockerfile。
+6. --image-name：指定要推送到 Google Container Registry 的 Docker 映像名稱。
+7. --image-tag：指定 Docker 映像的標籤，默認為 "latest"。
+8. --credentials-file：指定 Google Cloud Platform 的憑證 JSON 文件路徑，以便對 API 進行身份驗證。
+9. --allow-unauthenticated：允許未經身份驗證的請求訪問服務，默認為 False。
+10. --timeout：指定部署操作的超時（以秒為單位），默認為 300 秒。
+11. --memory：指定容器實例的內存大小，例如：256Mi，1Gi 等。
+12. --concurrency：指定容器實例的最大並發請求數量。
 
-class Params(BaseModel):
-    github_access_token: str
-    vercel_access_token: str
-    source_url: str
-    target_name: str
-    github_repo_url: str
-    vercel_project_name: str
-    vercel_team_id: str
+我如果要製作一個 to_cloud_run.py 全自動把 github 部署到 google cloud run 我應該設計哪些 python cli 參數
+
+--
+
+gcloud run deploy hello \
+--image=us-docker.pkg.dev/cloudrun/container/hello \
+--allow-unauthenticated \
+--service-account=1037695533427-compute@developer.gserviceaccount.com \
+--concurrency=1 \
+--cpu=0.1 \
+--memory=128Mi \
+--max-instances=1 \
+--region=us-central1 \
+--project=falra-368206
+
+--
+
+抓取 github repo
+Dockerfile 打包
+image 上架到 gcr
+cloud run 納入 gcr image
+cloud run 設定好相關參數之後啟動
+
+--
+
+最好是每一個 py 都做成 package 逐步實現，先搞清楚要實現哪些好了
+
+--
+
+您可以根據不同的功能將此過程拆分為多個 .py 檔案。以下是一個建議的拆分方式：
+
+1. `trigger_github_actions.py`：用於觸發 Vercel 驅動的 GitHub Actions。
+   * 參數：`--repo`（GitHub 倉庫名稱），`--token`（GitHub API 令牌）
+
+2. `build_docker_image.py`：用於將指定的 GitHub repo 打包為 Docker image。
+   * 參數：`--repo`（GitHub 倉庫名稱），`--tag`（Docker image 標籤），`--token`（GitHub API 令牌）
+
+3. `push_to_gcr.py`：用於將 Docker image 上架 Google Container Registry（GCR）。
+   * 參數：`--image`（Docker image 名稱），`--tag`（Docker image 標籤），`--gcr_project`（GCR 專案名稱），`--gcr_key`（GCR 憑證）
+
+4. `deploy_to_cloud_run.py`：用於使用該 Docker image 啟動一個 Google Cloud Run 服務。
+   * 參數：`--image`（Docker image 名稱），`--tag`（Docker image 標籤），`--service`（Cloud Run 服務名稱），`--project`（Google Cloud 專案名稱），`--region`（Google Cloud 區域），`--gcp_key`（Google Cloud 憑證）
+
+您可以根據您的需求進一步拆分或調整這些腳本。這些腳本可以作為獨立的 CLI 工具使用，並根據需要在不同的 GitHub Actions 工作流程中調用。
 
 
-@app.post("/submit")
-async def submit_params(params: Params):
-    return {"message": "Parameters received successfully", "params": params}
+--
 
-幫我修改在送出按下去之後 submit_params
-我要陸續呼叫以下的套件功能
-. 要先設定環境變數
-. 然後要呼叫 git_clone.main(source_url, target_name)
-. 然後要呼叫 vercel_deploy.main(github_repo_url, vercel_project_name, vercel_team_id)
-. 把所有呼叫之後的結果回傳給前端
+我想要設計一個
+可以動態建立 github actions yml 檔案的 cli .py 檔案
+請給我檔案名字
+也給我完整檔案設計
 
--- pip install vercel-deploy 套件網路 API 參考文件如下 --
+我想要設計一個 create_yml_and_trigger_github_actions.py 
+用以建立 github y驅動指定 repo 的指定 .yml
+我該怎麼設計他的 cli 參數？
 
-import git_clone
+--
 
-source_url = "https://github.com/source_user/source_repo.git"
-target_name = "new_repo_name"
+為了從外部讀取 YAML 檔案並將其傳送給 GitHub Actions，您需要使用 GitHub API 來建立或更新 GitHub 倉庫中的 .github/workflows/ 目錄下的 YAML 檔案。以下是修改後的 Python 程式碼：
 
-response_string=git_clone.main(source_url, target_name)
-
-import vercel_deploy
-
-github_repo_url = "https://github.com/user/repo.git"
-vercel_project_name = "vercel_project_name"
-vercel_team_id = "team_id"
-
-response_string=vercel_deploy.main(github_repo_url, vercel_project_name, vercel_team_id)
+```python
+import argparse
+import base64
+import os
+import requests
+import yaml
 
 
-== 2023-04-05 22:37 Bowen ==
-. vercel 部署已經成功
-. 地雷，要注意 requirements.txt引用充足 vercel.json路由正確
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Upload GitHub Actions YAML file from external source")
+    parser.add_argument("-t", "--token", type=str, required=True, help="GitHub personal access token")
+    parser.add_argument("-o", "--owner", type=str, required=True, help="GitHub repository owner")
+    parser.add_argument("-r", "--repo", type=str, required=True, help="GitHub repository name")
+    parser.add_argument("-y", "--yaml_path", type=str, required=True, help="Path to the external YAML file")
+    return parser.parse_args()
 
-== 2023-04-05 22:28 Bowen ==
-. 已經可以前端顯示
-. 準備要弄上 vercel 測試
 
-== chatgpt ==
+def read_yaml_file(yaml_path):
+    with open(yaml_path, "r") as file:
+        return file.read()
 
-. 請幫我建構前後端，都使用 fastapi app.py 單一檔案不要有額外的檔案出現
-. 前端使用 bootstrap RWD 排版要整齊, 手機也要能用, 引用 bootstrap 時不要 integrity 屬性
-. 前端要能輸入以下參數 001 to 007
-    . 環境變數
-        001 <your-github-access-token>
-        002 <your-vercel-access-token>
-    . git_clone 
-        003 <source_url> 
-        004 <target_name>
-    . vercel_deploy
-        005 <github_repo_url> 
-        006 <vercel_project_name> 
-        007 <vercel_team_id>
-. 前端參數輸入之後儲存在瀏覽器的 localStorage
-. 如果 localStorage 沒有這些參數就預設是空的輸入框
-. 如果 localStorage 已經有 001 to 007 參數，事先帶入預設值放上去
-. 前端要有一個「送出」按鈕，可以把參數送給後端
-. 前端要有一個較大塊的返回顯示區域，專門用來顯示後端執行之後的返回結果
-. 送出按鈕按下去之後，要能夠把後端返回哪些成功或失敗的訊息，全部顯示在返回顯示區域
-. fastapi 後端接收到 001 to 007 參數之後，返回一個 json 說明 OK 成功
 
+def get_github_api_headers(token):
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+
+def get_workflow_file_sha(owner, repo, file_path, token):
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+    headers = get_github_api_headers(token)
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()["sha"]
+    return None
+
+
+def upload_yaml_to_github(owner, repo, yaml_content, yaml_path, token):
+    file_path = os.path.join(".github", "workflows", os.path.basename(yaml_path))
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+    headers = get_github_api_headers(token)
+    sha = get_workflow_file_sha(owner, repo, file_path, token)
+
+    payload = {
+        "message": f"Update {file_path}",
+        "content": base64.b64encode(yaml_content.encode()).decode(),
+        "branch": "main",
+    }
+    if sha:
+        payload["sha"] = sha
+
+    response = requests.put(url, json=payload, headers=headers)
+    if response.status_code in [201, 200]:
+        print(f"Uploaded GitHub Actions YAML file to {file_path}")
+    else:
+        print(f"Error uploading GitHub Actions YAML file: {response.status_code} {response.text}")
+
+
+def main():
+    args = parse_arguments()
+    yaml_content = read_yaml_file(args.yaml_path)
+    upload_yaml_to_github(args.owner, args.repo, yaml_content, args.yaml_path, args.token)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+要使用此程式碼，請執行以下操作：
+
+1. 將上述程式碼儲存為 `upload_github_actions_yml.py`。
+2. 在終端機中，使用 `python upload_github_actions_yml.py` 並加上相應的參數來執行此檔案。例如：
+
+```bash
+python upload_github_actions_yml.py --token YOUR_GITHUB_TOKEN --owner your_username --repo your_repository --yaml_path path/to/your/workflow.yml
+```
+
+這將從指定的外部 YAML 檔案讀取內容，然後使用 GitHub API 將其上傳到 GitHub 倉庫的 `.github/workflows/` 目錄中。
+
+**注意**：請將 `YOUR_GITHUB_TOKEN` 替換為您的 GitHub 個人訪問令牌，將 `your_username`、`your_repository` 和 `path/to/your/workflow.yml` 替換為您的 GitHub 倉庫擁有者、倉庫名稱和外部 YAML 檔案的路徑。
+
+--
+
+給我一個超級最簡單的 github actions .yml 設計，只有 http post dispatch 觸發才會執行
+
+--
+
+你可以使用以下的 GitHub Actions YAML 文件作為一個超級簡單的範例。這個文件將會在收到 HTTP POST dispatch 事件時觸發。
+
+```yaml
+name: Simple GitHub Actions Example
+
+on:
+  repository_dispatch:
+
+jobs:
+  run_on_dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo "Hello, World!"
+        run: echo "Hello, World!"
+```
+
+在這個例子中，當 GitHub 收到一個 repository_dispatch 事件時，它會運行一個名為 "run_on_dispatch" 的工作。這個工作將在最新版本的 Ubuntu 虛擬環境上運行，並執行一個步驟，它只是在控制台中打印出 "Hello, World!"。
+
+請注意，要觸發這個 GitHub Actions 工作流程，你需要在你的 GitHub 存儲庫中創建一個 repository_dispatch 事件，通常可以通過發送 POST 請求到 GitHub API 來實現。
+
+--
+
+首先，我們要創建一個 Python 腳本，用於觸發 GitHub Actions。請確保已安裝 `requests` 库。如果尚未安裝，可以使用以下命令安裝：
+
+```bash
+pip install requests
+```
+
+接下來，創建一個名為 `trigger_github_actions.py` 的 Python 文件，並添加以下代碼：
+
+```python
+import requests
+import os
+
+def trigger_github_actions(repository, event_type, token):
+    url = f"https://api.github.com/repos/{repository}/dispatches"
+    headers = {
+        "Accept": "application/vnd.github.everest-preview+json",
+        "Authorization": f"token {token}",
+    }
+    data = {
+        "event_type": event_type,
+    }
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code == 204:
+        print(f"Successfully triggered '{event_type}' event in {repository}")
+    else:
+        print(f"Failed to trigger event. Status code: {response.status_code}, response: {response.text}")
+
+if __name__ == "__main__":
+    repo = os.environ["GITHUB_REPOSITORY"]
+    event = os.environ["GITHUB_EVENT_TYPE"]
+    access_token = os.environ["GITHUB_ACCESS_TOKEN"]
+
+    trigger_github_actions(repo, event, access_token)
+```
+
+在這個腳本中，`trigger_github_actions` 函數接受 GitHub 存儲庫名稱、要觸發的事件類型（在我們的示例中為 "repository_dispatch"）以及 GitHub 的個人訪問令牌。此函數使用 `requests` 庫發送 POST 請求到 GitHub API，觸發指定事件。
+
+要使用此腳本觸發之前提到的 .yml 工作流程，請按照以下步驟操作：
+
+1. 將此 .yml 工作流程添加到 GitHub 存儲庫的 `.github/workflows` 文件夾中（例如，命名為 `simple_workflow.yml`）：
+
+```yaml
+name: Simple GitHub Actions Example
+
+on:
+  repository_dispatch:
+
+jobs:
+  run_on_dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo "Hello, World!"
+        run: echo "Hello, World!"
+```
+
+2. 獲取一個具有足夠權限（至少需要 "repo" 權限）的 GitHub 個人訪問令牌。在 GitHub 設置中的 "Developer settings" > "Personal access tokens" > "Generate new token" 處生成新令牌。
+
+3. 將令牌添加到環境變量中，以便 `trigger_github_actions.py` 腳本使用。在命令行中運行以下命令（使用實際的令牌替換`<your_token>`）：
+
+```bash
+export GITHUB_ACCESS_TOKEN=<your_token>
+```
+
+4. 設置要觸發工作流程的存儲庫和事件類型環境變量。將 `<your_username>` 和 `<your_repository>` 替換為 GitHub 存儲庫的實際用戶名和存儲庫名稱。在命令行中運行以下命令：
+
+```bash
+export GITHUB_REPOSITORY=<your_username>/<your_repository>
+export GITHUB_EVENT_TYPE=repository_dispatch
+```
+
+5. 運行 `trigger_github_actions.py` 腳本以觸發 GitHub Actions 工作流程：
+
+```bash
+python trigger_github_actions.py
+```
+
+這將觸發名為 "Simple GitHub Actions Example" 的工作流程，並在 GitHub 存儲庫中的 Actions 頁面上顯示運行結果。
+
+--
+
+請幫我設計一個可以上傳任意 .yml 檔案到 github actions 的 .py 檔案的 cli 介面設計，告訴我所有的參數，還有告訴我應該如何運用他的使用範例，必須包含從檔案輸入 .yml 也可以用字串輸入 .yml。不要告訴我源碼
+
+== 001 upload_github_actions_yml.py ==
+
+CLI 介面設計：
+
+命令名稱：upload_yml
+
+參數：
+1. --file, -f: 指定要上傳的 .yml 檔案的路徑。
+2. --content, -c: 以字串形式提供 .yml 檔案的內容。
+3. --repo, -r: 指定 GitHub repository 的名稱，格式為 "user/repo"。
+4. --token, -t: 提供 GitHub personal access token 以進行身份驗證。
+5. --branch, -b: 指定要上傳 .yml 檔案的分支（預設為 "main"）。
+6. --path, -p: 指定要在 repository 中儲存 .yml 檔案的目錄路徑。
+7. --name, -n: 指定 .yml 文件在 repository 中的檔案名稱。
+
+使用範例：
+
+1. 從檔案輸入 .yml：
+
+```
+python upload_yml.py --file ./my_workflow.yml --repo "username/reponame" --token "your_token" --branch "main" --path ".github/workflows" --name "my_workflow.yml"
+```
+
+這個命令將從本地檔案 `./my_workflow.yml` 讀取 .yml 內容，然後將其上傳到指定的 GitHub repository `username/reponame` 的 `main` 分支，並儲存在 ".github/workflows" 目錄下，檔案名稱為 "my_workflow.yml"。
+
+2. 用字串輸入 .yml：
+
+```
+python upload_yml.py --content "on: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest" --repo "username/reponame" --token "your_token" --branch "main" --path ".github/workflows" --name "my_workflow.yml"
+```
+
+這個命令將從字串變數中讀取 .yml 內容，然後將其上傳到指定的 GitHub repository `username/reponame` 的 `main` 分支，並儲存在 ".github/workflows" 目錄下，檔案名稱為 "my_workflow.yml"。
+
+== 002 simple_dispatch_workflow.yml ==
+
+抱歉，讓我提供一個更簡單的示例。這個 YAML 文件只包含一個簡單的工作，它將在手動觸發時在運行環境中打印 "Hello, World!"。
+
+```yaml
+name: Simple Dispatch Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simple-job:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Print Hello, World!
+      run: echo "Hello, World!"
+```
+
+== 003 github_actions_dispatch.py ==
+
+請將這個 YAML 文件保存為 `.github/workflows/simple-dispatch-workflow.yml`，並將其添加到您的存儲庫中。然後，您可以在 GitHub 存儲庫的 "Actions" 頁面上找到並手動觸發這個工作流程。
+
+首先，我會提供一個概述及說明如何設計此CLI應用程序。此應用程序將需要以下參數：
+
+1. GitHub存儲庫的所有者（用戶名或組織名）
+2. GitHub存儲庫的名稱
+3. GitHub Actions工作流ID或文件名
+4. GitHub個人訪問令牌（用於驅動工作流）
+
+我們將使用 Python 的 `argparse` 模塊來實現CLI參數解析。
+
+CLI應用程序和使用示例：
+
+```bash
+python github_actions_dispatch.py --owner <owner_name> --repo <repo_name> --workflow <workflow_id_or_name> --token <github_access_token>
+```
+
+== 004 github_repo_dockerizer.py ==
+
+參數設計：
+    請給我一個 python .py cli 程式碼的cli相關參數設計
+    請給我適合的檔案名字
+功能說明：
+    功能是要可以副本複製任意指定的 github 任意 repo
+    然後要能將這個任意指定的 github repo 進行 Dockerfile 包裝任務
+    然後要可以把這個 docker image 推到 gcr 並且指定版本
+    
+檔案名稱：`github_repo_dockerizer.py`
+
+參數設計：
+
+1. `--github-url`: GitHub 倉庫的 URL，例如：https://github.com/username/repo.git
+2. `--github-token`: GitHub personal access token (選填)
+3. `--clone-dir`: 存放複製 GitHub 倉庫的本地目錄，例如：./repo/
+4. `--dockerfile-path`: Dockerfile 的路徑，例如：./Dockerfile
+5. `--gcr-project-id`: Google Cloud Platform 專案的 ID，例如：my-gcp-project
+6. `--gcr-repo-name`: GCR 倉庫的名稱，例如：my-gcr-repo
+7. `--image-tag`: 推送到 GCR 的 Docker image 的標籤，例如：v1.0.0
+8. `--gcp-key-file`: GCP service account key JSON 檔案的路徑 (選填)，例如：./key.json
+9. `--gcp-key-json`: GCP service account key JSON 字串 (選填)
+
+範例命令：
+
+```bash
+python github_repo_dockerizer.py --github-url https://github.com/username/repo.git --clone-dir ./repo/ --dockerfile-path ./Dockerfile --gcr-project-id my-gcp-project --gcr-repo-name my-gcr-repo --image-tag v1.0.0
+```
+
+== 005 deploy_to_cloud_run.py ==
+請設計一個 python cli 參數，還有檔案名稱
+功能是要可以部署 gcr docker image to google cloud run
+
+預設參數可以參考這個：
+gcloud run deploy hello \
+--image=us-docker.pkg.dev/cloudrun/container/hello \
+--allow-unauthenticated \
+--service-account=1037695533427-compute@developer.gserviceaccount.com \
+--concurrency=1 \
+--cpu=0.1 \
+--memory=128Mi \
+--max-instances=1 \
+--region=us-central1 \
+--project=falra-368206
+
+以下是如何使用 `deploy_to_cloud_run.py` 腳本的 CLI 用法：
+
+```sh
+python deploy_to_cloud_run.py \
+--project_id <your_project_id> \
+--region <your_region> \
+--service_name <your_service_name> \
+--image_name <your_image_name> \
+--service_account <your_service_account> \
+--concurrency <your_concurrency> \
+--cpu <your_cpu> \
+--memory <your_memory> \
+--max_instances <your_max_instances>
+```
+
+將 `<your_...>` 替換為適當的值。例如：
+
+```sh
+python deploy_to_cloud_run.py \
+--project_id falra-368206 \
+--region us-central1 \
+--service_name hello \
+--image_name us-docker.pkg.dev/cloudrun/container/hello \
+--service_account 1037695533427-compute@developer.gserviceaccount.com \
+--concurrency 1 \
+--cpu 0.1 \
+--memory 128Mi \
+--max_instances 1
+```
+
+這將使用指定的參數部署 GCR Docker 映像到 Google Cloud Run。
+
+== 006 setup_custom_domain.py ==
+
+1. 打開終端機（命令提示字元或PowerShell等）。
+
+2. 將當前目錄切換到`setup_custom_domain.py`腳本所在的目錄。
+
+3. 在命令行中，輸入以下命令以執行腳本：
+
+```
+python setup_custom_domain.py [subdomain] [service_id] [key_file]
+```
+
+其中：
+
+- `[subdomain]`是你希望添加到GoDaddy域名並掛載到Google Cloud Run服務的子域名。
+- `[service_id]`是你的Google Cloud Run服務的ID。
+- `[key_file]`是包含你的GCP服務帳戶密鑰的JSON文件的路徑。
+
+例如，如果你希望設置子域名`my-run`，你的Google Cloud Run服務ID是`my-service`，並且你的密鑰文件名為`key.json`，則應輸入以下命令：
+
+```
+python setup_custom_domain.py my-run my-service key.json
+```
+
+此腳本會自動在GoDaddy API
