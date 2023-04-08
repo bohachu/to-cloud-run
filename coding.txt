@@ -1,3 +1,8 @@
+== 2023-04-08 10:20 Bowen ==
+已經新增 to_cloud_run.py 應該是通用的
+todo 要上傳 pip package, 要有版本號碼
+todo 要輕易在 notebook 就能跑 python -m to_cloud_run
+
 == 2023-04-06 22:00 Bowen ==
 . 自動化 github to google cloud run 部署作業
 
