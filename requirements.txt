@@ -7,3 +7,4 @@ vercel-deploy==1.9
 PyGithub
 python-dotenv
 requests
+upload-files-to-github

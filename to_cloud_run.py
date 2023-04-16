@@ -3,8 +3,6 @@ from os import getenv, system, path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 
 def create_dockerfile():
     if not path.exists('./Dockerfile'):
@@ -47,6 +45,7 @@ def deploy_cloud_run(image_repo, service_account, region='us-central1', cpu=0.08
 
 
 def main():
+    load_dotenv()
     if not getenv('GCP_PROJECT_ID'):
         print('Error: GCP_PROJECT_ID is not set in the environment or .env file.')
         return
