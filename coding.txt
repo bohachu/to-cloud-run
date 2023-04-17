@@ -1,3 +1,7 @@
+2023-04-17 12:00 Bowen
+python -m to_pip -n to-cloud-run -v 1.5 to_cloud_run.py
+    增加說明文字
+
 == 2023-04-17 07:25 Bowen ==
 python -m to_pip -n to-cloud-run -v 1.2 to_cloud_run.py
     增添把固定 to-pip 參數變成變數

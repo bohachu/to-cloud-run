@@ -44,8 +44,21 @@ def deploy_cloud_run(service_name, image_repo, service_account, region='us-centr
            f'--project={getenv("GCP_PROJECT_ID")}')
 
 
+def usage():
+    print('''Suggest create requirements.txt at folder root:
+uvicorn
+fastapi
+starlette
+pydantic
+jinja2
+
+Please put all your fastapi files into ./app folder.
+    ''')
+
+
 def main():
-    load_dotenv(getcwd()+"/.env")
+    usage()
+    load_dotenv(getcwd() + "/.env")
     if not getenv('GCP_PROJECT_ID'):
         print('Error: GCP_PROJECT_ID is not set in the environment or .env file.')
         return
