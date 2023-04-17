@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from os import getenv, system, path
+from os import getenv, system, path, getcwd
 
 from dotenv import load_dotenv
 
@@ -19,19 +19,19 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
             f.write(dockerfile)
 
 
-def build_docker_image(platform='linux/amd64', tag='1.9.0'):
+def build_docker_image(service_name, platform='linux/amd64', tag='1.9.0'):
     create_dockerfile()
-    system(f'docker build --platform {platform} -t to-pip .')
-    image_repo = f'gcr.io/{getenv("GCP_PROJECT_ID")}/to-pip:{tag}'
-    system(f'docker tag to-pip {image_repo}')
+    system(f'docker build --platform {platform} -t {service_name} .')
+    image_repo = f'gcr.io/{getenv("GCP_PROJECT_ID")}/{service_name}:{tag}'
+    system(f'docker tag {service_name} {image_repo}')
     system(f'docker push {image_repo}')
     return image_repo
 
 
-def deploy_cloud_run(image_repo, service_account, region='us-central1', cpu=0.08, memory='128Mi',
+def deploy_cloud_run(service_name, image_repo, service_account, region='us-central1', cpu=0.08, memory='128Mi',
                      max_instances=1, port=8000):
     system(f'gcloud config set run/region {region}')
-    system(f'gcloud run deploy to-pip '
+    system(f'gcloud run deploy {service_name} '
            f'--image={image_repo} '
            f'--allow-unauthenticated '
            f'--port={port} '
@@ -45,6 +45,7 @@ def deploy_cloud_run(image_repo, service_account, region='us-central1', cpu=0.08
 
 
 def main():
+    print("getcwd()", getcwd())
     load_dotenv()
     if not getenv('GCP_PROJECT_ID'):
         print('Error: GCP_PROJECT_ID is not set in the environment or .env file.')
@@ -53,8 +54,9 @@ def main():
         print('Error: GCP_SERVICE_ACCOUNT is not set in the environment or .env file.')
         return
 
-    parser = ArgumentParser(description='Deploy to-pip service to GCP Cloud Run')
+    parser = ArgumentParser(description='Deploy a service to GCP Cloud Run')
     arg = parser.add_argument
+    arg('-n', '--service-name', required=True, help='Service name')
     arg('-p', '--platform', default='linux/amd64', help='Docker build platform')
     arg('-t', '--image-tag', required=True, help='Docker image tag')
     arg('-s', '--service-account', default=getenv('GCP_SERVICE_ACCOUNT'),
@@ -68,8 +70,9 @@ def main():
     args = parser.parse_args()
 
     image_tag = args.image_tag
-    image_repo = build_docker_image(platform=args.platform, tag=image_tag)
-    deploy_cloud_run(image_repo=image_repo, service_account=args.service_account, region=args.region,
+    service_name = args.service_name
+    image_repo = build_docker_image(service_name, platform=args.platform, tag=image_tag)
+    deploy_cloud_run(service_name, image_repo=image_repo, service_account=args.service_account, region=args.region,
                      cpu=args.cpu, memory=args.memory, max_instances=args.max_instances,
                      port=args.port)
 

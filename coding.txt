@@ -1,3 +1,20 @@
+== 2023-04-17 07:25 Bowen ==
+python -m to_pip -n to-cloud-run -v 1.2 to_cloud_run.py
+    增添把固定 to-pip 參數變成變數
+
+08:03
+python -m to_pip -n to-cloud-run -v 1.3 to_cloud_run.py
+def main():
+    print("getcwd()", getcwd())
+    load_dotenv()
+
+
+== 2023-04-16 23:54 Bowen ==
+todo github to-cloud-run 需要修改如下
+todo 要刪掉本專案其他不用的東西，本專案應該只有保留 to_cloud_run.py 避免誤解
+todo 往後 github project 都改用 to-cloud-run to-pip 不要底線的版本專案名稱了
+todo 往後 py 都一律底線避免出錯 to_cloud_run.py to_pip.py 跟專案名稱不一樣沒關係
+
 == 2023-04-08 10:20 Bowen ==
 已經新增 to_cloud_run.py 應該是通用的
 todo 要上傳 pip package, 要有版本號碼
