@@ -1,48 +1,70 @@
-# 自動化 from github to google cloud run 部署作業
-## 舉例：部署 to-pip 服務到 GCP Cloud Run (繁體中文版)
+# 將服務部署到 GCP Cloud Run
 
-重點請看：to_cloud_run.py
+這個 Python 腳本可以幫助你快速將你的服務部署到 GCP Cloud Run。你只需要提供服務名稱、Docker 映像標籤、GCP 服務帳戶等參數，它就會自動編譯 Docker 映像並部署到 GCP Cloud Run 上。
 
-這個 Python 腳本可將 to-pip 服務部署到 Google Cloud Platform (GCP) 的 Cloud Run 上。它將使用 Docker 建立一個映像檔，然後將映像檔上傳到 Google Container Registry。最後，它將使用 gcloud 工具部署映像檔到 Cloud Run。
+## 前置作業
 
-## 環境配置
+在開始之前，你需要先安裝以下工具：
 
-1. 確保已安裝 [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)。
-2. 使用 `gcloud init` 初始化您的 Google Cloud SDK 配置。
-3. 安裝 Docker，以便在本地機器上建立 Docker 映像檔。
+- [Docker](https://www.docker.com/)
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
 
-## 使用說明
+你還需要擁有一個 GCP 帳戶以及一個 GCP 專案。在你的 GCP 專案中，你需要創建一個服務帳戶，並為它授予以下權限：
 
-1. 將您的 GCP 專案 ID 和 GCP 服務帳戶電子郵件設置為環境變數，或將它們放在 `.env` 檔案中。範例：
+- Cloud Run Admin
+- Service Account User
+- Storage Admin
+- Viewer
 
+最後，你需要在你的本地環境中設置以下環境變量：
+
+- `GCP_PROJECT_ID`：你的 GCP 專案 ID。
+- `GCP_SERVICE_ACCOUNT`：你創建的 GCP 服務帳戶的 email。
+
+## pip install 使用方法
+
+1. pip install to-cloud-run
+
+2. python -m to_cloud_run
+
+## github 使用方法
+
+1. 下載 `to_cloud_run.py` 腳本。
+
+2. 在你的服務目錄中創建一個 `.env` 文件，並在其中設置 `GCP_PROJECT_ID` 和 `GCP_SERVICE_ACCOUNT` 環境變量。
+
+3. 創建一個 `requirements.txt` 文件，列出你的 Python 依賴項。
+
+4. 創建一個 `app.py` 文件，編寫你的服務代碼。
+
+5. 在命令行中運行以下命令：
+
+   ```bash
+   python to_cloud_run.py -n <service-name> -t <image-tag> -s <service-account>
    ```
-   GCP_PROJECT_ID=your-project-id
-   GCP_SERVICE_ACCOUNT=your-service-account-email
-   ```
 
-2. 安裝 Python 套件依賴：
+   其中，`<service-name>` 是你的服務名稱，`<image-tag>` 是你的 Docker 映像標籤，`<service-account>` 是你的 GCP 服務帳戶 email。你可以使用其他可選參數來配置 Cloud Run 的 CPU、內存、最大實例數等參數。
 
-   ```
-   pip install -r requirements.txt
-   ```
+6. 等待部署完成。部署完成後，你可以在 GCP Cloud Run 控制台上查看你的服務。
 
-3. 運行 `to_cloud_run.py` 腳本：
+## 可選參數
 
-   ```
-   python to_cloud_run.py --image-tag your-image-tag
-   ```
-
-   您可以通過 `--platform`、`--region`、`--cpu`、`--memory`、`--max-instances` 和 `--port` 參數來自定義部署選項。例如：
-
-   ```
-   python to_cloud_run.py --image-tag your-image-tag --platform linux/amd64 --region us-central1 --cpu 0.08 --memory 128Mi --max-instances 1 --port 8000
-   ```
-
-4. 腳本將建立 Docker 映像檔，將映像檔上傳到 Google Container Registry，並部署到 GCP Cloud Run。
-
-5. 當部署完成後，您可以在 Google Cloud Console 中查看您的微服務。
+- `-n, --service-name`：你的服務名稱。
+- `-p, --platform`：Docker 映像編譯平台，默認為 `linux/amd64`。
+- `-t, --image-tag`：Docker 映像標籤。
+- `-s, --service-account`：GCP 服務帳戶 email。
+- `-c, --cpu`：Cloud Run CPU 分配，默認為 `0.08`。
+- `-m, --memory`：Cloud Run 內存分配，默認為 `128Mi`。
+- `-i, --max-instances`：Cloud Run 最大實例數，默認為 `1`。
+- `-r, --region`：Cloud Run 部署區域，默認為 `us-central1`。
+- `-o, --port`：容器端口，默認為 `8000`。
 
 ## 注意事項
 
-- 確保您具有足夠的權限，可以編輯您的 GCP 專案和服務帳戶。
-- 若要避免產生額外費用，請記得在不需要使用服務時刪除部署的微服務。
+- 該腳本僅支持 Python 3.6 及以上版本。
+- 該腳本需要使用 Docker 進行映像編譯，請確保你已經安裝了 Docker。
+- 該腳本需要使用 Google Cloud SDK 進行 Cloud Run 部署，請確保你已經安裝了 Google Cloud SDK。
+- 該腳本會在當前目錄下創建一個 `Dockerfile` 文件，請確保該目錄有寫入權限。
+- 該腳本會自動將 Docker 映像推送到 GCR 中，請確保你有相應的權限。
+- 該腳本會自動設置 Cloud Run 部署區域為 `us-central1`，如果需要部署到其他區域，請使用 `-r` 參數指定。
+- 該腳本會自動設置 Cloud Run 最大實例數為 `1`，如果需要多實例運行，請使用 `-i` 參數指定。
