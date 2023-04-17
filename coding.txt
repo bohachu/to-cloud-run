@@ -8,6 +8,20 @@ def main():
     print("getcwd()", getcwd())
     load_dotenv()
 
+08:07
+python -m to_pip -n to-cloud-run -v 1.4 to_cloud_run.py
+def main():
+    load_dotenv(getcwd()+"/.env")
+
+搞定，成功 python -m to_cloud_run 也可以讀取到 .env
+def main():
+    load_dotenv(getcwd()+"/.env")
+    if not getenv('GCP_PROJECT_ID'):
+        print('Error: GCP_PROJECT_ID is not set in the environment or .env file.')
+        return
+    if not getenv('GCP_SERVICE_ACCOUNT'):
+        print('Error: GCP_SERVICE_ACCOUNT is not set in the environment or .env file.')
+        return
 
 == 2023-04-16 23:54 Bowen ==
 todo github to-cloud-run 需要修改如下

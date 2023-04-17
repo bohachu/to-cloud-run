@@ -45,8 +45,7 @@ def deploy_cloud_run(service_name, image_repo, service_account, region='us-centr
 
 
 def main():
-    print("getcwd()", getcwd())
-    load_dotenv()
+    load_dotenv(getcwd()+"/.env")
     if not getenv('GCP_PROJECT_ID'):
         print('Error: GCP_PROJECT_ID is not set in the environment or .env file.')
         return
